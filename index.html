@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>攝影學科丙級 - 模擬測驗系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        .correct-bg { background-color: #d1fae5 !important; border-color: #10b981 !important; }
+        .wrong-bg { background-color: #fee2e2 !important; border-color: #ef4444 !important; }
+        .disabled-label { opacity: 0.6; cursor: not-allowed; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- 頂部導航 / 狀態列 -->
+    <div id="top-bar" class="fixed top-0 w-full bg-blue-600 text-white shadow-md z-50 hidden">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="font-bold text-lg">攝影丙級模擬測驗</div>
+            <div class="flex items-center space-x-6">
+                <div id="timer" class="text-xl font-mono bg-blue-800 px-3 py-1 rounded">00:00</div>
+                <div id="score-display" class="hidden font-bold text-yellow-300 text-xl"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto pt-20 pb-12 px-4">
+        
+        <!-- 登入畫面 -->
+        <div id="login-screen" class="bg-white rounded-xl shadow-lg p-8 mt-10 max-w-md mx-auto">
+            <h1 class="text-2xl font-bold text-center text-blue-600 mb-6">攝影學科丙級模擬測驗</h1>
+            <p class="text-gray-500 text-sm mb-6 text-center">共 80 題單選題，每題 1.25 分。<br>交卷後須完成錯題訂正方可記錄成績。</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">姓名</label>
+                    <input type="text" id="student-name" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="請輸入姓名">
+                </div>
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">學號 (選填)</label>
+                    <input type="text" id="student-id" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="請輸入學號">
+                </div>
+                <button onclick="startExam()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200 mt-4">
+                    開始測驗
+                </button>
+            </div>
+        </div>
+
+        <!-- 測驗畫面 -->
+        <div id="exam-screen" class="hidden space-y-6">
+            <div id="questions-container" class="space-y-6"></div>
+            
+            <div class="text-center mt-8">
+                <button id="submit-btn" onclick="submitExam()" class="bg-green-600 hover:bg-green-700 text-white text-lg font-bold py-3 px-12 rounded-full shadow-lg transition duration-200">
+                    交卷並計算成績
+                </button>
+                <button id="verify-btn" onclick="verifyCorrections()" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white text-lg font-bold py-3 px-12 rounded-full shadow-lg transition duration-200">
+                    確認訂正答案
+                </button>
+                <button id="finish-btn" onclick="finishExam()" class="hidden bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-3 px-12 rounded-full shadow-lg transition duration-200">
+                    完成測驗並上傳成績
+                </button>
+            </div>
+        </div>
+
+        <!-- 結算畫面 -->
+        <div id="result-screen" class="hidden bg-white rounded-xl shadow-lg p-10 mt-10 text-center">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-2">測驗完成！</h2>
+            <p class="text-gray-600 mb-6">您的成績與作答紀錄已確認</p>
+            <div class="bg-gray-100 rounded-lg p-6 inline-block text-left mb-6">
+                <p class="text-lg"><strong>姓名：</strong> <span id="res-name"></span></p>
+                <p class="text-lg text-blue-600"><strong>最終得分：</strong> <span id="res-score" class="text-3xl font-bold"></span> 分</p>
+                <p class="text-lg"><strong>花費時間：</strong> <span id="res-time"></span></p>
+            </div>
+            <p id="upload-status" class="text-sm font-semibold text-gray-500"></p>
+        </div>
+
+    </div>
+
+    <!-- 自訂對話框 (Modal) 取代原生 Alert/Confirm -->
+    <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-8 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
+            <h3 id="modal-title" class="text-2xl font-bold mb-4 text-gray-800">提示</h3>
+            <p id="modal-message" class="text-gray-600 mb-8 whitespace-pre-line text-lg"></p>
+            <div id="modal-buttons" class="flex justify-end space-x-4">
+                <button id="modal-cancel-btn" class="hidden px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-bold transition">取消</button>
+                <button id="modal-ok-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 系統設定區
+        // ==========================================
+        // 請將下方引號內的網址替換為您的 Google Apps Script Web App URL
+        const GAS_URL = "https://script.google.com/macros/library/d/18KDi0fVS24FRrtsYFndnPM7Cgb-UBexxov4ohT83ZiuetqHRUznF2Myj/1"; 
+        
+        // 測驗設定
+        const TOTAL_QUESTIONS = 80;
+        const POINT_PER_QUESTION = 1.25;
+
+        // 系統狀態
+        let parsedQuestions = [];
+        let currentExam = [];
+        let userAnswers = {};
+        let startTime, timerInterval;
+        let finalScore = 0;
+        let isCorrectionMode = false;
+
+        // 自訂對話框控制函數
+        function showModal(title, message, showCancel = false, onOk = null) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+            const okBtn = document.getElementById('modal-ok-btn');
+            const modal = document.getElementById('custom-modal');
+
+            cancelBtn.classList.toggle('hidden', !showCancel);
+            modal.classList.remove('hidden');
+
+            okBtn.onclick = () => {
+                modal.classList.add('hidden');
+                if (onOk) onOk();
+            };
+
+            cancelBtn.onclick = () => {
+                modal.classList.add('hidden');
+            };
+        }
+
+        // ==========================================
+        // 題庫資料 (支援直接貼上 PDF 全文)
+        // ==========================================
+        const rawTextData = `
+// 📌 教師請注意：
+// 您可以將 PDF 裡 600 多題的文字「全選 -> 複製」後，直接貼到這裡。
+// 系統已經升級，會自動過濾掉 PDF 的頁碼、浮水印等雜訊，自動幫您排版！
+1.(1) 相同焦距的反射鏡頭與變焦鏡頭比較,下列何者錯誤?①反射鏡頭長度較長②反射鏡頭光圈為固定式,光圈比較小③反射鏡頭結構簡單,重量比較輕④反射鏡頭的畫質及銳利度較差。
+2.(2) 攝影鏡頭具有能誇張物體間距,並產生強烈透視效果的是①標準鏡頭②廣角鏡頭③望遠鏡頭④微距鏡頭(micro)。
+3.(3) 可將遠處景物拉近,影像具有空間壓縮視覺效果的是①標準鏡頭②廣角鏡頭③望遠鏡頭④微距鏡頭(micro)
+4.(1) 135底片相機的廣角鏡頭焦距約①24mm ②50mm ③85mm ④200mm。
+5.(3) 下列鏡頭何者具有調整影像透視變形功能?①微距鏡頭(micro) ②廣角鏡頭③移軸鏡頭④增距鏡頭。
+`;
+
+        // ==========================================
+        // 初始化與題庫解析
+        // ==========================================
+        function initSystem() {
+            // 1. 清理常見的 PDF 轉檔雜訊、浮水印、頁碼
+            let cleanedData = rawTextData
+                .replace(/--- PAGE \d+ ---/gi, '')
+                .replace(/Page \d+ of \d+/gi, '')
+                .replace(/9000[6-9].*?工作項目.*?\n/g, '')
+                .replace(/WORORCE|LOPMENT AGENCY M|STRY OF LABOR|MINISTRY OF LABOR|WORKFORCE DEV|WDA/gi, '')
+                .replace(/\n定\n/g, '')
+                .replace(/\[Image \d+\]/g, '');
+
+            // 2. 升級版正則表達式，支援跨行容錯解析
+            const regex = /(\d+)\.\s*\(([1-4])\)\s*([\s\S]*?)①([\s\S]*?)②([\s\S]*?)③([\s\S]*?)④([\s\S]*?)(?=(?:\d+\.\s*\([1-4]\))|$)/g;
+            let match;
+            while ((match = regex.exec(cleanedData)) !== null) {
+                parsedQuestions.push({
+                    ans: parseInt(match[2]) - 1, 
+                    q: match[3].trim().replace(/\s+/g, ' '), 
+                    options: [
+                        match[4].trim().replace(/\s+/g, ' '),
+                        match[5].trim().replace(/\s+/g, ' '),
+                        match[6].trim().replace(/\s+/g, ' '),
+                        match[7].trim().replace(/\s+/g, ' ')
+                    ]
+                });
+            }
+            console.log(`已成功載入 ${parsedQuestions.length} 題題庫`);
+        }
+
+        function startExam() {
+            const name = document.getElementById('student-name').value.trim();
+            if (!name) {
+                alert("請填寫姓名！");
+                return;
+            }
+
+            // 準備考試資料
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('exam-screen').classList.remove('hidden');
+            document.getElementById('top-bar').classList.remove('hidden');
+            
+            // 隨機抽選題目 (若題庫夠大則抽 TOTAL_QUESTIONS 題，否則全出)
+            let shuffled = [...parsedQuestions].sort(() => 0.5 - Math.random());
+            currentExam = shuffled.slice(0, Math.min(TOTAL_QUESTIONS, parsedQuestions.length));
+            
+            renderQuestions();
+            
+            // 啟動計時器
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function renderQuestions() {
+            const container = document.getElementById('questions-container');
+            container.innerHTML = '';
+
+            currentExam.forEach((item, index) => {
+                const qDiv = document.createElement('div');
+                qDiv.className = 'bg-white rounded-lg shadow-md p-6 border border-gray-200';
+                qDiv.id = `q-container-${index}`;
+                
+                let html = `<div class="font-bold text-lg mb-4 text-gray-800"><span class="text-blue-600 mr-2">Q${index + 1}.</span>${item.q}</div>`;
+                html += `<div class="space-y-3 pl-2">`;
+                
+                item.options.forEach((opt, optIdx) => {
+                    html += `
+                        <label id="label-${index}-${optIdx}" class="flex items-start p-3 border rounded-lg cursor-pointer hover:bg-blue-50 transition duration-150">
+                            <input type="radio" name="q${index}" value="${optIdx}" class="mt-1 mr-3 h-4 w-4 text-blue-600" onchange="recordAnswer(${index}, ${optIdx})">
+                            <span class="text-gray-700">${opt}</span>
+                        </label>
+                    `;
+                });
+                
+                html += `</div>`;
+                qDiv.innerHTML = html;
+                container.appendChild(qDiv);
+            });
+        }
+
+        function recordAnswer(qIndex, optIndex) {
+            userAnswers[qIndex] = optIndex;
+        }
+
+        function updateTimer() {
+            const now = new Date();
+            const diff = Math.floor((now - startTime) / 1000);
+            const m = String(Math.floor(diff / 60)).padStart(2, '0');
+            const s = String(diff % 60).padStart(2, '0');
+            document.getElementById('timer').innerText = `${m}:${s}`;
+        }
+
+        // ==========================================
+        // 測驗批改與訂正邏輯
+        // ==========================================
+        function submitExam() {
+            // 檢查是否全答
+            const unanswered = currentExam.length - Object.keys(userAnswers).length;
+            if (unanswered > 0) {
+                showModal("尚未完成", `您還有 ${unanswered} 題未作答，確定要交卷嗎？`, true, () => {
+                    processSubmit();
+                });
+            } else {
+                processSubmit();
+            }
+        }
+
+        function processSubmit() {
+            clearInterval(timerInterval);
+            isCorrectionMode = true;
+
+            let correctCount = 0;
+            let hasWrong = false;
+
+            currentExam.forEach((item, index) => {
+                const userAns = userAnswers[index];
+                const qContainer = document.getElementById(`q-container-${index}`);
+                
+                if (userAns === item.ans) {
+                    correctCount++;
+                    // 答對的題目隱藏，專注於錯題
+                    qContainer.classList.add('hidden');
+                } else {
+                    hasWrong = true;
+                    // 標示出錯的選項
+                    if (userAns !== undefined) {
+                        document.getElementById(`label-${index}-${userAns}`).classList.add('wrong-bg');
+                    }
+                    // 加上錯題提示
+                    if (!document.getElementById(`wrong-msg-${index}`)) {
+                        const msg = document.createElement('div');
+                        msg.id = `wrong-msg-${index}`;
+                        msg.className = "mt-3 text-red-600 font-semibold text-sm";
+                        msg.innerText = "❌ 答錯了，請重新選擇正確答案以進行訂正。";
+                        qContainer.appendChild(msg);
+                    }
+                }
+            });
+
+            finalScore = (correctCount * POINT_PER_QUESTION).toFixed(2);
+            
+            // 顯示分數
+            const scoreDisplay = document.getElementById('score-display');
+            scoreDisplay.innerText = `得分: ${finalScore}`;
+            scoreDisplay.classList.remove('hidden');
+
+            document.getElementById('submit-btn').classList.add('hidden');
+
+            if (hasWrong) {
+                showModal("交卷成功！", `您的得分為 ${finalScore} 分。\n\n系統已隱藏答對的題目，請將留下的錯題重新選擇正確答案，才能完成測驗。`);
+                document.getElementById('verify-btn').classList.remove('hidden');
+                window.scrollTo(0, 0);
+            } else {
+                // 全對直接完成
+                showResultScreen();
+            }
+        }
+
+        function verifyCorrections() {
+            let allCorrected = true;
+
+            currentExam.forEach((item, index) => {
+                // 如果這題原本答錯 (沒有被 hidden)
+                const qContainer = document.getElementById(`q-container-${index}`);
+                if (!qContainer.classList.contains('hidden')) {
+                    const currentSelected = document.querySelector(`input[name="q${index}"]:checked`);
+                    
+                    // 重置此題所有選項樣式
+                    for(let i=0; i<4; i++) {
+                        document.getElementById(`label-${index}-${i}`).classList.remove('wrong-bg', 'correct-bg');
+                    }
+
+                    if (currentSelected && parseInt(currentSelected.value) === item.ans) {
+                        // 訂正正確
+                        document.getElementById(`label-${index}-${item.ans}`).classList.add('correct-bg');
+                        document.getElementById(`wrong-msg-${index}`).innerText = "✅ 訂正正確！";
+                        document.getElementById(`wrong-msg-${index}`).className = "mt-3 text-green-600 font-semibold text-sm";
+                        
+                        // 鎖定選項
+                        for(let i=0; i<4; i++) {
+                            const input = document.querySelector(`input[name="q${index}"][value="${i}"]`);
+                            input.disabled = true;
+                            document.getElementById(`label-${index}-${i}`).classList.add('disabled-label');
+                        }
+                    } else {
+                        // 依然錯誤
+                        allCorrected = false;
+                        if (currentSelected) {
+                            document.getElementById(`label-${index}-${currentSelected.value}`).classList.add('wrong-bg');
+                        }
+                    }
+                }
+            });
+
+            if (allCorrected) {
+                document.getElementById('verify-btn').classList.add('hidden');
+                document.getElementById('finish-btn').classList.remove('hidden');
+                showModal("太棒了！", "所有錯題皆已訂正完畢。\n請點擊下方的「完成測驗並上傳成績」。");
+            } else {
+                showModal("尚未完成訂正", "還有題目未訂正正確，請再檢查一下紅色標示的選項喔！");
+            }
+        }
+
+        // ==========================================
+        // 結算與資料上傳
+        // ==========================================
+        function showResultScreen() {
+            document.getElementById('exam-screen').classList.add('hidden');
+            document.getElementById('top-bar').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+
+            const name = document.getElementById('student-name').value;
+            const timeStr = document.getElementById('timer').innerText;
+
+            document.getElementById('res-name').innerText = name;
+            document.getElementById('res-score').innerText = finalScore;
+            document.getElementById('res-time').innerText = timeStr;
+        }
+
+        async function finishExam() {
+            showResultScreen();
+            
+            const name = document.getElementById('student-name').value;
+            const studentId = document.getElementById('student-id').value || "無";
+            const timeStr = document.getElementById('timer').innerText;
+            const statusText = document.getElementById('upload-status');
+            
+            statusText.innerText = "⏳ 正在上傳成績至伺服器...";
+            statusText.className = "text-sm font-semibold text-blue-500";
+
+            // 如果教師未設定 GAS_URL，則略過上傳
+            if (GAS_URL.includes("請在此貼上")) {
+                statusText.innerText = "⚠️ 成績已結算 (教師尚未設定 Google Sheets 連線，無上傳紀錄)。";
+                statusText.className = "text-sm font-semibold text-yellow-600 mt-4";
+                return;
+            }
+
+            try {
+                // 使用 text/plain 來避開瀏覽器的 CORS 預檢請求 (OPTIONS)，讓資料能成功送到 Apps Script
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain;charset=utf-8', 
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        studentId: studentId,
+                        score: finalScore,
+                        duration: timeStr
+                    })
+                });
+                
+                statusText.innerText = "✅ 測驗紀錄已成功上傳給老師！您可以關閉此視窗。";
+                statusText.className = "text-sm font-semibold text-green-600 mt-4";
+            } catch (error) {
+                console.error('Error:', error);
+                statusText.innerText = "❌ 網路連線錯誤，成績上傳失敗，請截圖本畫面給老師。";
+                statusText.className = "text-sm font-semibold text-red-600 mt-4";
+            }
+        }
+
+        // 啟動解析題庫
+        initSystem();
+
+    </script>
+</body>
+</html>
